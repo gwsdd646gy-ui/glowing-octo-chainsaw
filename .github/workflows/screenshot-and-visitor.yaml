@@ -93,11 +93,12 @@ jobs:
           STARS_RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
             "https://api.github.com/repos/$OWNER/$REPO/stargazers")
 
-          if echo "$STARS_RESPONSE" | jq -e . >/dev/null 2>&1; then
-            STARS_USERS=$(echo "$STARS_RESPONSE" | jq -r '.[].login' | jq -R -s 'split("\n") | map(select(length > 0))')
+          if echo "$STARS_RESPONSE" | jq -e 'if type == "array" then true else false end' >/dev/null 2>&1; then
+            STARS_USERS=$(echo "$STARS_RESPONSE" | jq -r '.[].login' 2>/dev/null | jq -R -s 'split("\n") | map(select(length > 0))')
             STARS_COUNT=$(echo "$STARS_USERS" | jq 'length')
-            STARGAZERS_DETAILED=$(echo "$STARS_RESPONSE" | jq '[.[] | {login: .login, avatar_url: .avatar_url, html_url: .html_url, starred_at: now | strftime("%Y-%m-%d %H:%M:%S")}]')
+            STARGAZERS_DETAILED=$(echo "$STARS_RESPONSE" | jq '[.[] | {login: .login, avatar_url: .avatar_url, html_url: .html_url, starred_at: now | strftime("%Y-%m-%d %H:%M:%S")}]' 2>/dev/null)
           else
+            echo "⚠️ Stargazers response is not a valid array. Response: $(echo "$STARS_RESPONSE" | head -c 100)"
             STARS_USERS='[]'
             STARS_COUNT=0
             STARGAZERS_DETAILED='[]'
@@ -178,7 +179,7 @@ jobs:
           fi
 
           # Додаємо інструменти
-          TECH_BADGES="$TECH_BADGES[![Terminal](https://img.shields.io/badge/mac%20terminal-000000?style=for-the-badge&logo=apple&logoColor=white&labelColor=000000)](https://support.apple.com/guide/terminal/welcome/mac) "
+          TECH_BADGES="$TECH_BADGES[![Terminal](https://img.shields.io/badge/mac%20terminal-000000?style=for-the-badge&logo=apple&logoColor=white&labelColor=000000)](https://support.apple.com/guide/terminal) "
           TECH_BADGES="$TECH_BADGES[![VS Code](https://img.shields.io/badge/VS_Code-007ACC?style=for-the-badge&logo=visual-studio-code&logoColor=white)](https://code.visualstudio.com/) "
           TECH_BADGES="$TECH_BADGES[![GitHub](https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/) "
           TECH_BADGES="$TECH_BADGES[![Figma](https://img.shields.io/badge/Figma-F24E1E?style=for-the-badge&logo=figma&logoColor=white)](https://www.figma.com/) "
