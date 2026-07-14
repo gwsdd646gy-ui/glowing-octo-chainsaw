@@ -135,13 +135,19 @@ jobs:
           REPO_INFO=$(curl -s -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
             "https://api.github.com/repos/$OWNER/$REPO")
 
-          REPO_SIZE=$(echo "$REPO_INFO" | jq -r '.size // 0')
-          REPO_SIZE_MB=$(echo "scale=1; $REPO_SIZE / 1024" | bc -l 2>/dev/null || echo "0")
-          MAIN_LANGUAGE=$(echo "$REPO_INFO" | jq -r '.language // "Unknown"')
-          LICENSE=$(echo "$REPO_INFO" | jq -r '.license.name // "No License"')
+          if echo "$REPO_INFO" | jq -e 'if type == "object" and .message == null then true else false end' >/dev/null 2>&1; then
+            REPO_SIZE=$(echo "$REPO_INFO" | jq -r '.size // 0')
+            REPO_SIZE_MB=$(echo "scale=1; $REPO_SIZE / 1024" | bc -l 2>/dev/null || echo "0")
+            MAIN_LANGUAGE=$(echo "$REPO_INFO" | jq -r '.language // "Unknown"')
+            LICENSE=$(echo "$REPO_INFO" | jq -r '.license.name // "No License"')
+          else
+            echo "⚠️ Repository info fetch failed"
+            REPO_SIZE_MB="0"
+            MAIN_LANGUAGE="Unknown"
+            LICENSE="No License"
+          fi
 
           echo '{"schemaVersion": 1, "label": "📦 size", "message": "'${REPO_SIZE_MB}'MB", "color": "blue", "style": "'$BADGE_STYLE'"}' > "$DATA_DIR/repo-size.json"
-
           echo '{"schemaVersion": 1, "label": "📄 license", "message": "'$LICENSE'", "color": "blue", "style": "'$BADGE_STYLE'"}' > "$DATA_DIR/repo-license.json"
 
           # RELEASES
@@ -150,9 +156,11 @@ jobs:
             "https://api.github.com/repos/$OWNER/$REPO/releases")
 
           TOTAL_DOWNLOADS=0
-          if echo "$RELEASES_RESPONSE" | jq -e '. | length > 0' >/dev/null 2>&1; then
-            TOTAL_DOWNLOADS=$(echo "$RELEASES_RESPONSE" | jq '[.[].assets[].download_count] | add // 0')
-            echo '{"schemaVersion": 1, "label": "⬇️ downloads", "message": "'$TOTAL_DOWNLOADS'", "color": "orange", "style": "'$BADGE_STYLE'"}' > "$DATA_DIR/downloads-badge.json"
+          if echo "$RELEASES_RESPONSE" | jq -e 'if type == "array" and (. | length > 0) then true else false end' >/dev/null 2>&1; then
+            TOTAL_DOWNLOADS=$(echo "$RELEASES_RESPONSE" | jq '[.[].assets[].download_count] | add // 0' 2>/dev/null || echo "0")
+            if [ "$TOTAL_DOWNLOADS" != "null" ] && [ "$TOTAL_DOWNLOADS" != "" ]; then
+              echo '{"schemaVersion": 1, "label": "⬇️ downloads", "message": "'$TOTAL_DOWNLOADS'", "color": "orange", "style": "'$BADGE_STYLE'"}' > "$DATA_DIR/downloads-badge.json"
+            fi
           fi
 
           # === ТЕХНОЛОГІЧНІ БЕЙДЖІ ===
@@ -163,8 +171,8 @@ jobs:
           LANGUAGES_RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
             "https://api.github.com/repos/$OWNER/$REPO/languages")
 
-          if echo "$LANGUAGES_RESPONSE" | jq -e . >/dev/null 2>&1; then
-            TOP_LANGUAGES=$(echo "$LANGUAGES_RESPONSE" | jq -r 'to_entries | sort_by(.value) | reverse | .[0:3] | .[].key')
+          if echo "$LANGUAGES_RESPONSE" | jq -e 'if type == "object" and .message == null then true else false end' >/dev/null 2>&1; then
+            TOP_LANGUAGES=$(echo "$LANGUAGES_RESPONSE" | jq -r 'to_entries | sort_by(.value) | reverse | .[0:3] | .[].key' 2>/dev/null)
             
             for lang in $TOP_LANGUAGES; do
               case $lang in
